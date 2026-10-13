@@ -1,7 +1,11 @@
 services:
+  database:
+    environment:
+      POSTGRES_DB: cidades_esg_staging
   app:
     environment:
+      DB_URL: jdbc:postgresql://database:5432/cidades_esg_staging
       SPRING_PROFILES_ACTIVE: staging
       SEED_DATA: "true"
-    ports:
-      - "${APP_PORT:-8081}:8080"
+    ports: !override
+      - "8081:8080"

@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cidades_esg}
       POSTGRES_USER: ${POSTGRES_USER:-esg_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-esg_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no ambiente ou .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -25,7 +25,7 @@ services:
     environment:
       DB_URL: jdbc:postgresql://database:5432/${POSTGRES_DB:-cidades_esg}
       DB_USER: ${POSTGRES_USER:-esg_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-esg_password}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no ambiente ou .env}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       SEED_DATA: ${SEED_DATA:-true}
     ports:

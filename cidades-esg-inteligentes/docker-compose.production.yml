@@ -1,7 +1,11 @@
 services:
+  database:
+    environment:
+      POSTGRES_DB: cidades_esg_production
   app:
     environment:
+      DB_URL: jdbc:postgresql://database:5432/cidades_esg_production
       SPRING_PROFILES_ACTIVE: production
       SEED_DATA: "false"
-    ports:
-      - "${APP_PORT:-8082}:8080"
+    ports: !override
+      - "8082:8080"

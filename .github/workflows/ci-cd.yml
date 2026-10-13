@@ -17,10 +17,16 @@ concurrency:
 env:
   IMAGE_NAME: cidades-esg:${{ github.sha }}
 
+defaults:
+  run:
+    shell: bash
+    working-directory: cidades-esg-inteligentes
+
 jobs:
   build-and-test:
     name: Build e testes
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
@@ -31,6 +37,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+          cache-dependency-path: cidades-esg-inteligentes/pom.xml
 
       - name: Compilar e executar testes
         run: mvn --batch-mode clean verify
@@ -40,29 +47,31 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: relatorios-de-testes
-          path: target/surefire-reports/
+          path: cidades-esg-inteligentes/target/surefire-reports/
           if-no-files-found: warn
 
       - name: Construir imagem Docker
         run: docker build --tag "$IMAGE_NAME" .
 
       - name: Empacotar imagem para os deploys
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: docker save "$IMAGE_NAME" | gzip > cidades-esg-image.tar.gz
 
       - name: Publicar imagem como artefato
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: imagem-docker
-          path: cidades-esg-image.tar.gz
+          path: cidades-esg-inteligentes/cidades-esg-image.tar.gz
+          if-no-files-found: error
           retention-days: 1
 
   deploy-staging:
     name: Deploy em staging
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: staging
     steps:
@@ -73,6 +82,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: imagem-docker
+          path: cidades-esg-inteligentes
 
       - name: Carregar imagem Docker
         run: gunzip -c cidades-esg-image.tar.gz | docker load
@@ -80,19 +90,29 @@ jobs:
       - name: Subir staging e executar smoke test
         env:
           APP_PORT: 8081
-          POSTGRES_PASSWORD: staging-ci-password
+          POSTGRES_DB: cidades_esg_staging
+          POSTGRES_USER: esg_staging
+          EVIDENCE_DIR: evidence/staging
         run: |
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> "$GITHUB_ENV"
           mkdir -p evidence/staging
           sh ./scripts/deploy-environment.sh staging | tee evidence/staging/deploy.log
-          curl --fail --silent http://localhost:8081/actuator/health | tee evidence/staging/health.json
-          curl --fail --silent http://localhost:8081/api/cities/ranking | tee evidence/staging/ranking.json
+
+      - name: Coletar diagnóstico de staging
+        if: always()
+        run: |
+          mkdir -p evidence/staging
+          docker compose -p cidades-esg-staging -f docker-compose.yml -f docker-compose.staging.yml ps -a > evidence/staging/containers.txt
+          docker compose -p cidades-esg-staging -f docker-compose.yml -f docker-compose.staging.yml logs --no-color > evidence/staging/containers.log 2>&1
 
       - name: Publicar evidências de staging
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: evidencias-staging
-          path: evidence/staging/
+          path: cidades-esg-inteligentes/evidence/staging/
           if-no-files-found: warn
 
       - name: Encerrar staging
@@ -101,9 +121,10 @@ jobs:
 
   deploy-production:
     name: Deploy em produção
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: deploy-staging
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: production
     steps:
@@ -114,6 +135,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: imagem-docker
+          path: cidades-esg-inteligentes
 
       - name: Carregar a mesma imagem validada
         run: gunzip -c cidades-esg-image.tar.gz | docker load
@@ -121,18 +143,29 @@ jobs:
       - name: Subir produção e executar smoke test
         env:
           APP_PORT: 8082
-          POSTGRES_PASSWORD: production-ci-password
+          POSTGRES_DB: cidades_esg_production
+          POSTGRES_USER: esg_production
+          EVIDENCE_DIR: evidence/production
         run: |
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> "$GITHUB_ENV"
           mkdir -p evidence/production
           sh ./scripts/deploy-environment.sh production | tee evidence/production/deploy.log
-          curl --fail --silent http://localhost:8082/actuator/health | tee evidence/production/health.json
+
+      - name: Coletar diagnóstico de production
+        if: always()
+        run: |
+          mkdir -p evidence/production
+          docker compose -p cidades-esg-production -f docker-compose.yml -f docker-compose.production.yml ps -a > evidence/production/containers.txt
+          docker compose -p cidades-esg-production -f docker-compose.yml -f docker-compose.production.yml logs --no-color > evidence/production/containers.log 2>&1
 
       - name: Publicar evidências de produção
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: evidencias-production
-          path: evidence/production/
+          path: cidades-esg-inteligentes/evidence/production/
           if-no-files-found: warn
 
       - name: Encerrar produção

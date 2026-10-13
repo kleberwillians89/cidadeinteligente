@@ -6,3 +6,7 @@ target/
 *.log
 evidence/*.log
 evidence/*.txt
+
+.env.*
+!.env.example
+*-image.tar.gz

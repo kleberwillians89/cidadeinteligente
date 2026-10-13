@@ -15,7 +15,7 @@ O **Cidades ESG Inteligentes** é uma API REST para cadastrar indicadores ambien
 
 O projeto demonstra um ciclo DevOps completo:
 
-1. o código é compilado;
+1. o código é compilado (fluxo configurado, execução remota ainda pendente);
 2. sete testes automatizados verificam o comportamento;
 3. uma imagem Docker imutável é criada;
 4. a mesma imagem é promovida para **staging** e depois para **produção**;
@@ -51,8 +51,10 @@ Docker Compose: volume persistente + rede esg-network + variáveis de ambiente
 
 ### Pré-requisitos
 
-- Docker Desktop com Docker Compose v2.
-- Portas `8080` e `5432` livres.
+- Docker Desktop com Docker Compose **2.24.4 ou superior** (os overrides usam `!override`).
+- Java 21 e Maven para build fora do Docker; Python 3 e curl para os smoke tests.
+- Porta `8080` livre; PostgreSQL fica na rede interna, sem porta publicada.
+- Execute os comandos abaixo a partir de `cidades-esg-inteligentes/`: `cd cidades-esg-inteligentes`.
 
 ### Passos
 
@@ -101,7 +103,7 @@ java -jar target/cidades-esg-inteligentes-1.0.0.jar --spring.profiles.active=dem
 
 ## Pipeline CI/CD
 
-A automação está em `.github/workflows/ci-cd.yml` e usa **GitHub Actions**. Ela é acionada em *pull requests*, em *pushes* para `main` ou manualmente por `workflow_dispatch`.
+A automação está em `.github/workflows/ci-cd.yml` **na raiz do repositório**, um nível acima do `pom.xml`. Todos os comandos `run` usam a subpasta `cidades-esg-inteligentes`; caminhos das actions de cache e artefatos incluem essa subpasta. O shell Bash aplica `pipefail`, preservando falhas em comandos com `tee`. A automação usa **GitHub Actions**. Ela é acionada em *pull requests*, em *pushes* para `main` ou manualmente por `workflow_dispatch`.
 
 ### Etapas
 
@@ -230,7 +232,7 @@ Coberturas funcionais implementadas:
 - listagem REST;
 - rejeição de payload inválido.
 
-Validação realizada em 21/09/2026: **7 testes executados, 0 falhas, 0 erros, 0 ignorados; BUILD SUCCESS**.
+Há evidência histórica local de 21/09/2026 em `docs/evidencias/`. Nesta revisão de 13/10/2026, Java, Maven e Docker estão indisponíveis: os testes Java e o build Docker não foram reexecutados. Consulte `docs/RELATORIO-CICD.md` para os resultados e limites desta revisão.
 
 ## Desafios encontrados e soluções
 
@@ -246,8 +248,10 @@ Validação realizada em 21/09/2026: **7 testes executados, 0 falhas, 0 erros, 0
 ## Estrutura do projeto
 
 ```text
-cidades-esg-inteligentes/
+raiz-do-repositorio/
 |-- .github/workflows/ci-cd.yml
+|-- Documentacao_Tecnica_Cidades_ESG_Inteligentes.pdf
+`-- cidades-esg-inteligentes/
 |-- docs/
 |   |-- GUIA-EVIDENCIAS.md
 |   `-- evidencias/
@@ -270,12 +274,12 @@ cidades-esg-inteligentes/
 
 | Item | OK |
 |---|:---:|
-| Projeto compactado em `.zip` com estrutura organizada | ☑ |
-| Dockerfile funcional e revisado | ☑ |
+| ZIP final atualizado | ☐ gerar após validar no GitHub |
+| Dockerfile multi-stage revisado | ☑ revisão; execução Docker pendente |
 | `docker-compose.yml` com aplicação, banco, volume, variáveis e rede | ☑ |
-| Pipeline com build, teste e deploy em staging e produção | ☑ |
+| Pipeline configurado na raiz com três jobs encadeados | ☑ configuração; execução remota pendente |
 | README com instruções e evidências locais | ☑ |
-| Documentação técnica em PDF com evidências | ☑ |
+| PDF preservado e alinhado à revisão atual | ☐ atualizar caminhos, validações e prints reais |
 | Deploy executado nos ambientes do GitHub | ☐ após publicar e rodar o workflow |
 | Prints reais do GitHub Actions/Deployments adicionados | ☐ após a primeira execução |
 | Nome e RM dos integrantes preenchidos no README e no PDF | ☐ preencher antes do envio |
@@ -286,3 +290,35 @@ cidades-esg-inteligentes/
 - Em um servidor permanente, salve segredos em **GitHub Environments/Secrets**.
 - Proteja `production` com aprovação obrigatória.
 - Troque imediatamente as senhas de exemplo.
+
+## Deploy e validação dos ambientes
+
+A partir de `cidades-esg-inteligentes/`, configure `.env` com uma senha local e construa a imagem:
+
+```bash
+docker build -t cidades-esg:local .
+./scripts/deploy-environment.sh staging
+./scripts/deploy-environment.sh production
+curl --fail http://localhost:8081/actuator/health
+curl --fail http://localhost:8081/api/cities/ranking
+curl --fail http://localhost:8082/actuator/health
+curl --fail http://localhost:8082/api/cities/ranking
+```
+
+O script fixa staging em 8081 e produção em 8082, independentemente de `APP_PORT` no `.env`. Os overrides substituem a lista de portas com `!override`. Os projetos Compose `cidades-esg-staging` e `cidades-esg-production` mantêm bancos, volumes e redes separados; os bancos também têm nomes distintos. Produção desativa seed e pode retornar listas vazias válidas.
+
+Para validar a configuração sem iniciar containers (requer senha no `.env`):
+
+```bash
+docker compose config --quiet
+docker compose -p cidades-esg-staging -f docker-compose.yml -f docker-compose.staging.yml config --quiet
+docker compose -p cidades-esg-production -f docker-compose.yml -f docker-compose.production.yml config --quiet
+```
+
+`docker compose ... down` preserva volumes locais. O pipeline usa `down -v` apenas para limpar os ambientes efêmeros. Não execute essa opção em um banco que deseja preservar.
+
+O smoke test exige HTTP bem-sucedido, JSON válido, health/readiness `UP` e listas de cidades/ranking no formato esperado. `EVIDENCE_DIR` define onde salvar respostas; sem essa variável usa uma pasta temporária exclusiva. O workflow gera uma senha aleatória por job, mascara-a e coleta logs/estado dos containers antes da limpeza, inclusive em falhas.
+
+## Pendências para entrega FIAP
+
+Preencher nomes e RMs, executar o pipeline no GitHub e anexar prints reais conforme `docs/GUIA-EVIDENCIAS.md`. O PDF original foi preservado; revisar nele a localização do workflow, Compose mínimo 2.24.4, isolamento/portas, senha temporária, status de validação e evidências da execução remota. Nenhum deploy permanente foi criado nesta revisão.

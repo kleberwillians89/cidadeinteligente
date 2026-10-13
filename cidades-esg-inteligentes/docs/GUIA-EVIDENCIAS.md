@@ -1,6 +1,6 @@
 # Guia rápido para concluir as evidências no GitHub
 
-Este roteiro deve ser executado depois que o projeto for publicado em um repositório.
+Repositório: https://github.com/kleberwillians89/cidadeinteligente, branch `main`. Execute este roteiro após publicar a correção; a revisão local não executou jobs remotos.
 
 ## 1. Preparar os ambientes
 
@@ -34,13 +34,13 @@ Na página do run, baixe:
 - `evidencias-staging`;
 - `evidencias-production`.
 
-Os JSONs de health devem mostrar `"status": "UP"`.
+Os JSONs `health.json` e `readiness.json` devem mostrar `"status": "UP"`. Ambos os ambientes também publicam `cities.json`, `ranking.json`, `deploy.log`, `containers.txt` e `containers.log`. Produção sem seed pode retornar listas vazias. Capture também construção da imagem e carga da mesma tag SHA nos dois jobs. Guarde URL do run, SHA e data com os prints; portas esperadas: staging 8081, produção 8082.
 
 ## 5. Atualizar a entrega
 
 1. Coloque os prints em `docs/evidencias/github/`.
 2. Adicione os links das imagens à seção **Prints do funcionamento** do `README.md`.
-3. Substitua as caixas pendentes do checklist por `☑`.
+3. Marque `☑` apenas nos requisitos com evidências verificadas.
 4. Preencha nome e RM no README e na documentação PDF.
 5. Gere novamente o ZIP antes de enviar à plataforma.
 
