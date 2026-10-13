@@ -1,0 +1,7 @@
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SEED_DATA: "true"
+    ports:
+      - "${APP_PORT:-8081}:8080"

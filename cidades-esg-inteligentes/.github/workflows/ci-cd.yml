@@ -1,0 +1,140 @@
+name: CI/CD - Cidades ESG Inteligentes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cidades-esg-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: cidades-esg:${{ github.sha }}
+
+jobs:
+  build-and-test:
+    name: Build e testes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21 e cache Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Compilar e executar testes
+        run: mvn --batch-mode clean verify
+
+      - name: Publicar relatórios dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-de-testes
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+      - name: Construir imagem Docker
+        run: docker build --tag "$IMAGE_NAME" .
+
+      - name: Empacotar imagem para os deploys
+        if: github.event_name != 'pull_request'
+        run: docker save "$IMAGE_NAME" | gzip > cidades-esg-image.tar.gz
+
+      - name: Publicar imagem como artefato
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagem-docker
+          path: cidades-esg-image.tar.gz
+          retention-days: 1
+
+  deploy-staging:
+    name: Deploy em staging
+    if: github.event_name != 'pull_request'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Baixar imagem aprovada no build
+        uses: actions/download-artifact@v4
+        with:
+          name: imagem-docker
+
+      - name: Carregar imagem Docker
+        run: gunzip -c cidades-esg-image.tar.gz | docker load
+
+      - name: Subir staging e executar smoke test
+        env:
+          APP_PORT: 8081
+          POSTGRES_PASSWORD: staging-ci-password
+        run: |
+          mkdir -p evidence/staging
+          sh ./scripts/deploy-environment.sh staging | tee evidence/staging/deploy.log
+          curl --fail --silent http://localhost:8081/actuator/health | tee evidence/staging/health.json
+          curl --fail --silent http://localhost:8081/api/cities/ranking | tee evidence/staging/ranking.json
+
+      - name: Publicar evidências de staging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-staging
+          path: evidence/staging/
+          if-no-files-found: warn
+
+      - name: Encerrar staging
+        if: always()
+        run: docker compose -p cidades-esg-staging -f docker-compose.yml -f docker-compose.staging.yml down -v
+
+  deploy-production:
+    name: Deploy em produção
+    if: github.event_name != 'pull_request'
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Baixar imagem aprovada em staging
+        uses: actions/download-artifact@v4
+        with:
+          name: imagem-docker
+
+      - name: Carregar a mesma imagem validada
+        run: gunzip -c cidades-esg-image.tar.gz | docker load
+
+      - name: Subir produção e executar smoke test
+        env:
+          APP_PORT: 8082
+          POSTGRES_PASSWORD: production-ci-password
+        run: |
+          mkdir -p evidence/production
+          sh ./scripts/deploy-environment.sh production | tee evidence/production/deploy.log
+          curl --fail --silent http://localhost:8082/actuator/health | tee evidence/production/health.json
+
+      - name: Publicar evidências de produção
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-production
+          path: evidence/production/
+          if-no-files-found: warn
+
+      - name: Encerrar produção
+        if: always()
+        run: docker compose -p cidades-esg-production -f docker-compose.yml -f docker-compose.production.yml down -v

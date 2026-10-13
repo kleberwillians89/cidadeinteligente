@@ -1,0 +1,38 @@
+[
+  {
+    "id": "4ac024bb-5db3-4ca2-9c89-db4cfec6b3e8",
+    "name": "Curitiba",
+    "state": "PR",
+    "population": 1773718,
+    "renewableEnergyPercentage": 84.0,
+    "recyclingRatePercentage": 42.0,
+    "greenAreaPerInhabitant": 64.5,
+    "publicTransportScore": 88.0,
+    "esgScore": 77.5,
+    "updatedAt": "2026-09-21T20:00:08.943712Z"
+  },
+  {
+    "id": "1b05f321-27d9-4fac-b3b3-a9393bcf49e1",
+    "name": "Florianópolis",
+    "state": "SC",
+    "population": 537211,
+    "renewableEnergyPercentage": 89.0,
+    "recyclingRatePercentage": 34.0,
+    "greenAreaPerInhabitant": 54.0,
+    "publicTransportScore": 73.0,
+    "esgScore": 74.25,
+    "updatedAt": "2026-09-21T20:00:08.967804Z"
+  },
+  {
+    "id": "dcc6125d-d1e9-47ca-a722-5bc43ca9478e",
+    "name": "São Paulo",
+    "state": "SP",
+    "population": 11451999,
+    "renewableEnergyPercentage": 71.0,
+    "recyclingRatePercentage": 18.0,
+    "greenAreaPerInhabitant": 16.3,
+    "publicTransportScore": 76.0,
+    "esgScore": 51.07,
+    "updatedAt": "2026-09-21T20:00:08.967804Z"
+  }
+]
